@@ -2,6 +2,38 @@
 
 from excel_reader import ExcelReader
 from pathlib import Path
+import pandas as pd
+from datetime import datetime
+
+
+def save_to_excel(df, output_path, sheet_name='Sheet1'):
+    """
+    儲存 DataFrame 到 Excel 檔案
+    
+    Args:
+        df: 要儲存的 DataFrame
+        output_path: 輸出檔案路徑（字串或 Path 物件）
+        sheet_name: 工作表名稱，預設為 'Sheet1'
+    
+    Returns:
+        bool: 儲存成功返回 True，失敗返回 False
+    """
+    try:
+        output_path = Path(output_path)
+        
+        # 確保輸出目錄存在
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 儲存為 Excel 檔案
+        with pd.ExcelWriter(output_path, engine='xlwt' if output_path.suffix == '.xls' else 'openpyxl') as writer:
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+        
+        print(f"\n✓ 檔案已成功儲存至: {output_path}")
+        return True
+        
+    except Exception as e:
+        print(f"\n✗ 儲存檔案時發生錯誤: {e}")
+        return False
 
 
 def main():
@@ -77,10 +109,38 @@ def main():
             # 刪除 T 欄為空值的列
             df4_cleaned = df4.dropna(subset=[df4.columns[1]])  # T 欄是第二欄（索引 1）
             df4_cleaned =  df4_cleaned.iloc[2:]
-            print(f"\n刪除前兩列和 T 欄空值後的資料:")
+            # 刪除最後一列
+            df4_cleaned = df4_cleaned.iloc[:-1]
+            
+            # 重新命名欄位
+            df4_cleaned.columns = ['項次', '數量', '複價']
+            
+            # 排序項次（格式為 "數字-數字"）
+            # 將項次拆分為兩個數字欄位進行排序
+            df4_cleaned['sort_key1'] = df4_cleaned['項次'].astype(str).str.split('-').str[0].astype(float)
+            df4_cleaned['sort_key2'] = df4_cleaned['項次'].astype(str).str.split('-').str[1].astype(float)
+            df4_cleaned = df4_cleaned.sort_values(by=['sort_key1', 'sort_key2'])
+            # 移除排序用的輔助欄位
+            df4_cleaned = df4_cleaned.drop(columns=['sort_key1', 'sort_key2'])
+            # 重置索引
+            df4_cleaned = df4_cleaned.reset_index(drop=True)
+            
+            print(f"\n刪除前兩列和 T 欄空值後的資料（已排序）:")
             print(f"總列數: {len(df4_cleaned)}")
             print(df4_cleaned.head(100))
             print()
+            
+            # 7. 儲存處理後的資料到新的 Excel 檔案
+            print("=" * 50)
+            print("儲存處理後的資料:")
+            print("=" * 50)
+            
+            # 生成輸出檔案名稱（加上時間戳記）
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = Path("C:\\Users\\YA\\Downloads") / f"processed_data_{timestamp}.xlsx"
+            
+            # 儲存檔案
+            save_to_excel(df4_cleaned, output_path, sheet_name='處理後資料')
             
     except FileNotFoundError as e:
         print(f"錯誤: {e}")
