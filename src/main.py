@@ -4,6 +4,11 @@ from excel_reader import ExcelReader
 from pathlib import Path
 import pandas as pd
 from datetime import datetime
+import sys
+
+# 將專案根目錄加入路徑以便導入 config
+sys.path.append(str(Path(__file__).parent.parent))
+from config import INPUT_FILE_PATH, OUTPUT_DIR, DEFAULT_SHEET_INDEX, COLUMNS_TO_READ, COLUMN_RENAME_MAP
 
 
 def save_to_excel(df, output_path, sheet_name='Sheet1'):
@@ -37,8 +42,8 @@ def save_to_excel(df, output_path, sheet_name='Sheet1'):
 
 
 def main():
-    # Excel 檔案路徑（請修改為您的實際檔案路徑）
-    file_path = Path("C:\\Users\\YA\\Downloads\\16P2759A-M0008-003-伸泰-電線電纜(第10期次計價)-114.11.29複製.xls")
+    # 從 config.py 讀取檔案路徑
+    file_path = INPUT_FILE_PATH
     
     try:
         # 使用 with 語句自動管理檔案
@@ -56,7 +61,7 @@ def main():
             print("=" * 50)
             print("讀取工作表（使用名稱）:")
             print("=" * 50)
-            sheet_name = sheet_names[2]  # 讀取第三個工作表
+            sheet_name = sheet_names[DEFAULT_SHEET_INDEX]  # 從 config 讀取工作表索引
             df1 = reader.read_sheet(sheet_name)
             print(f"\n工作表 '{sheet_name}' 的前 5列:")
             print(df1.head())
@@ -100,8 +105,8 @@ def main():
             print("=" * 50)
             print("讀取特定欄位:")
             print("=" * 50)
-            # 讀取 C、T、U 欄
-            df4 = reader.read_sheet(sheet_name, usecols="C,T,U")
+            # 從 config 讀取要處理的欄位
+            df4 = reader.read_sheet(sheet_name, usecols=COLUMNS_TO_READ)
             print(f"\n讀取 C、T、U 欄的資料（刪除前）:")
             print(f"總列數: {len(df4)}")
             print(df4.head())
@@ -112,8 +117,8 @@ def main():
             # 刪除最後一列
             df4_cleaned = df4_cleaned.iloc[:-1]
             
-            # 重新命名欄位
-            df4_cleaned.columns = ['項次', '數量', '複價']
+            # 從 config 讀取欄位名稱對應
+            df4_cleaned.columns = [COLUMN_RENAME_MAP[i] for i in range(len(df4_cleaned.columns))]
             
             # 排序項次（格式為 "數字-數字"）
             # 將項次拆分為兩個數字欄位進行排序
@@ -137,7 +142,8 @@ def main():
             
             # 生成輸出檔案名稱（加上時間戳記）
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = Path("C:\\Users\\YA\\Downloads") / f"processed_data_{timestamp}.xlsx"
+            # 從 config 讀取輸出目錄
+            output_path = OUTPUT_DIR / f"processed_data_{timestamp}.xlsx"
             
             # 儲存檔案
             save_to_excel(df4_cleaned, output_path, sheet_name='處理後資料')

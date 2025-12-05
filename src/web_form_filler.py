@@ -2,6 +2,7 @@
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
@@ -112,22 +113,128 @@ class WebFormFiller:
             填寫成功返回 True，失敗返回 False
         """
         try:
+            # 轉換為數字格式，移除千分位逗號等
+            try:
+                # 如果是字串，先移除逗號和空白
+                if isinstance(quantity, str):
+                    quantity = quantity.replace(',', '').strip()
+                quantity_value = float(quantity)
+                
+                if isinstance(amount, str):
+                    amount = amount.replace(',', '').strip()
+                amount_value = float(amount)
+            except (ValueError, TypeError) as e:
+                print(f"    ✗ 數值轉換錯誤: {e}")
+                return False
+            
             # 填入數量
             qty_element_id = f"gvReceive_txtRecvQty_{index}"
             qty_element = self.driver.find_element(By.ID, qty_element_id)
             qty_element.clear()
-            qty_element.send_keys(str(quantity))
-            print(f"    ✓ 已填入數量: {quantity}")
+            # 使用純數字格式（不含千分位逗號）
+            qty_element.send_keys(str(int(quantity_value)))
+            print(f"    ✓ 已填入數量: {int(quantity_value)}")
             
-            # 填入複價
+            # 模擬按下 Tab 鍵
+            qty_element.send_keys(Keys.TAB)
+            time.sleep(0.1)  # 等待頁面自動計算複價
+            
+            # 讀取自動計算的複價值
             amt_element_id = f"gvReceive_txtRecvAmt_{index}"
             amt_element = self.driver.find_element(By.ID, amt_element_id)
-            amt_element.clear()
-            amt_element.send_keys(str(amount))
-            print(f"    ✓ 已填入複價: {amount}")
+            auto_calculated_value = amt_element.get_attribute('value')
             
+            # 判斷是否需要手動填入複價
+            try:
+                # 將自動計算的值轉換為浮點數
+                auto_value_float = float(auto_calculated_value.replace(',', '').strip()) if auto_calculated_value else 0
+                
+                # 檢查小數點後是否全為 0
+                if auto_value_float == int(auto_value_float):
+                    # 小數點後全為 0，直接按 Tab
+                    print(f"    ✓ 複價已自動計算: {int(auto_value_float)}")
+                    amt_element.send_keys(Keys.TAB)
+                else:
+                    # 小數點後不為 0，需要手動填入
+                    amt_element.clear()
+                    amt_element.send_keys(str(int(amount_value)))
+                    print(f"    ✓ 已手動填入複價: {int(amount_value)}")
+                    amt_element.send_keys(Keys.TAB)
+                    
+                    # 等待 please wait 遮罩消失
+                    print(f"    ⏳ 等待頁面處理中...")
+                    time.sleep(0.3)  # 先等待 0.3 秒讓 please wait 出現
+                    
+                    # 嘗試檢查常見的 loading/please wait 元素
+                    max_wait = 30
+                    start_time = time.time()
+                    
+                    while time.time() - start_time < max_wait:
+                        try:
+                            # 檢查是否有包含 "wait" 或 "loading" 文字的可見元素
+                            loading_elements = self.driver.find_elements(By.XPATH, 
+                                "//*[contains(translate(text(), 'PLEASEWAIT', 'pleasewait'), 'wait') or contains(translate(text(), 'LOADING', 'loading'), 'loading')]")
+                            
+                            # 過濾出可見的元素
+                            visible_loading = [elem for elem in loading_elements if elem.is_displayed()]
+                            
+                            if not visible_loading:
+                                # 沒有可見的 loading 元素，再等待 1 秒確認
+                                time.sleep(1)
+                                loading_elements = self.driver.find_elements(By.XPATH, 
+                                    "//*[contains(translate(text(), 'PLEASEWAIT', 'pleasewait'), 'wait') or contains(translate(text(), 'LOADING', 'loading'), 'loading')]")
+                                visible_loading = [elem for elem in loading_elements if elem.is_displayed()]
+                                
+                                if not visible_loading:
+                                    print(f"    ✓ 頁面反應完成")
+                                    break
+                        except:
+                            pass
+                        
+                        time.sleep(0.1)
+                    else:
+                        print(f"    ⚠ 等待頁面反應超時，繼續執行")
+                    
+            except (ValueError, AttributeError):
+                # 如果無法解析，則手動填入
+                amt_element.clear()
+                amt_element.send_keys(str(int(amount_value)))
+                print(f"    ✓ 已手動填入複價: {int(amount_value)}")
+                amt_element.send_keys(Keys.TAB)
+                
+                # 等待頁面反應
+                print(f"    ⏳ 等待頁面處理中...")
+                time.sleep(1)
+                
+                max_wait = 30
+                start_time = time.time()
+                
+                while time.time() - start_time < max_wait:
+                    try:
+                        loading_elements = self.driver.find_elements(By.XPATH, 
+                            "//*[contains(translate(text(), 'PLEASEWAIT', 'pleasewait'), 'wait') or contains(translate(text(), 'LOADING', 'loading'), 'loading')]")
+                        visible_loading = [elem for elem in loading_elements if elem.is_displayed()]
+                        
+                        if not visible_loading:
+                            time.sleep(1)
+                            loading_elements = self.driver.find_elements(By.XPATH, 
+                                "//*[contains(translate(text(), 'PLEASEWAIT', 'pleasewait'), 'wait') or contains(translate(text(), 'LOADING', 'loading'), 'loading')]")
+                            visible_loading = [elem for elem in loading_elements if elem.is_displayed()]
+                            
+                            if not visible_loading:
+                                print(f"    ✓ 頁面反應完成")
+                                break
+                    except:
+                        pass
+                    
+                    time.sleep(0.1)
+                else:
+                    print(f"    ⚠ 等待頁面反應超時，繼續執行")
+            
+            #amt_element.send_keys(Keys.TAB)
+           
             # 短暫延遲，確保數據已輸入
-            time.sleep(0.3)
+            #time.sleep(0.3)
             
             return True
             
